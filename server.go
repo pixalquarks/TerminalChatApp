@@ -29,8 +29,9 @@ func main() {
 
 	// register chat server
 	cs := chatserver.ChatServer{
-		Clients: make(map[int]chatserver.Services_ChatServiceServer),
-		Mu:      sync.RWMutex{},
+		Clients:   make(map[int]chatserver.User),
+		NameToUid: make(map[string]int),
+		Mu:        sync.RWMutex{},
 	}
 	chatserver.RegisterServicesServer(grpcServer, &cs)
 	err = grpcServer.Serve(listen)
