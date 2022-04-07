@@ -9,7 +9,7 @@ import (
 	"math/rand"
 )
 
-func (is *ChatServer) CommandService(ctx context.Context, command *Command) (*emptypb.Empty, error) {
+func (is *ChatServer) CommandService(_ context.Context, command *Command) (*emptypb.Empty, error) {
 	cmd := rune(command.Type)
 	switch cmd {
 	case 'p', 'P':
@@ -31,13 +31,14 @@ func (is *ChatServer) CommandService(ctx context.Context, command *Command) (*em
 		}
 		is.Mu.Unlock()
 		messageHandleObject.mu.Lock()
-		clientUid, ok := is.NameToUid[command.Client]
+		id := command.Id
+		user, ok := is.Clients[id]
 		if !ok {
 			return &emptypb.Empty{}, errors.New("error finding the sender name")
 		}
 		messageHandleObject.MQue = append(messageHandleObject.MQue, messageUnit{
-			ClientName:        command.Client,
-			ClientUniqueCode:  clientUid,
+			ClientName:        user.Name,
+			ClientUniqueCode:  id,
 			MessageBody:       msg,
 			MessageUniqueCode: rand.Intn(1e8),
 			To:                writtenNames,
@@ -45,11 +46,11 @@ func (is *ChatServer) CommandService(ctx context.Context, command *Command) (*em
 		if len(errNames) > 0 {
 			messageHandleObject.MQue = append(messageHandleObject.MQue, messageUnit{
 				ClientName:        "server",
-				ClientUniqueCode:  clientUid,
+				ClientUniqueCode:  id,
 				MessageBody:       fmt.Sprintf("Could not find %v names in chat room", errNames),
 				MessageUniqueCode: rand.Intn(1e8),
 				To: []User{
-					is.Clients[clientUid],
+					user,
 				},
 			})
 		}
@@ -61,7 +62,7 @@ func (is *ChatServer) CommandService(ctx context.Context, command *Command) (*em
 	return &emptypb.Empty{}, nil
 }
 
-func (is *ChatServer) GetClients(context.Context, *emptypb.Empty) (*Clients, error) {
+func (is *ChatServer) GetClients(_ context.Context, _ *emptypb.Empty) (*Clients, error) {
 	log.Printf("GetClients command \n")
 	clientsMap := is.getClients()
 	log.Println(clientsMap)
@@ -72,7 +73,7 @@ func (is *ChatServer) GetClients(context.Context, *emptypb.Empty) (*Clients, err
 	for _, v := range clientsMap {
 		clientArr[count] = &Client{
 			Name: v.Name,
-			Id:   int32(v.Uid),
+			Id:   v.Uid,
 		}
 		count++
 	}
@@ -85,12 +86,56 @@ func (is *ChatServer) GetClients(context.Context, *emptypb.Empty) (*Clients, err
 	return clients, nil
 }
 
-func (is *ChatServer) VerifyName(ctx context.Context, clientName *ClientName) (*ClientNameResponse, error) {
+func (is *ChatServer) CreateClient(_ context.Context, clientName *ClientName) (*ClientNameResponse, error) {
 	log.Println(is.NameToUid)
 	_, ok := is.NameToUid[clientName.Name]
 	log.Println(ok)
+	if ok {
+		fmt.Printf("from create client : client with name %s already exists\n", clientName.Name)
+		return &ClientNameResponse{
+			Exists: ok,
+			Id:     -1,
+		}, nil
+	}
+	clientUniqueCode := rand.Int31n(1e6)
+	log.Printf("New user with uniqueID :: %v", clientUniqueCode)
+	is.Mu.Lock()
+	is.Clients[clientUniqueCode] = User{
+		Name: clientName.Name,
+		Uid:  clientUniqueCode,
+	}
+	is.NameToUid[clientName.Name] = clientUniqueCode
+	log.Printf("from create client :: client : %v  name : %v", is.Clients[clientUniqueCode], clientName.Name)
+	is.Mu.Unlock()
 	defer fmt.Println("verified")
 	return &ClientNameResponse{
 		Exists: ok,
+		Id:     clientUniqueCode,
 	}, nil
+}
+
+func (is *ChatServer) VerifyName(_ context.Context, name *ClientName) (*Exists, error) {
+	nameOk, err := VerifyNameCharacters(name.Name)
+	if err != nil {
+		return &Exists{
+			Exists: true,
+		}, err
+	}
+	if !nameOk {
+		return &Exists{
+			Exists: false,
+		}, errors.New("name should only contain alphanumeric characters and underscore")
+	}
+	_, ok := is.NameToUid[name.Name]
+	log.Println(ok)
+	return &Exists{
+		Exists: ok,
+	}, nil
+
+}
+
+func (is *ChatServer) RemoveClient(_ context.Context, client *Client) (*emptypb.Empty, error) {
+	fmt.Println("removing a client")
+	is.removeClient(client.Id)
+	return &emptypb.Empty{}, nil
 }

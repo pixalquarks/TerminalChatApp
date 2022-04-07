@@ -7,8 +7,8 @@ option go_package = "./chatserver";
 import "google/protobuf/empty.proto";
 
 message FromClient {
-  string name = 1;
-  string body = 2;
+  int32 id = 2;
+  string body = 3;
 }
 
 message FromServer {
@@ -29,7 +29,7 @@ message Clients {
 message Command {
   uint32 type = 1;
   string value = 2;
-  string client = 3;
+  int32 id = 3;
 }
 
 message ClientName {
@@ -38,11 +38,23 @@ message ClientName {
 
 message ClientNameResponse {
   bool exists = 1;
+  int32 id = 2;
+}
+
+message Exists {
+  bool exists = 1;
+}
+
+message StreamRequest {
+  int32 id = 1;
 }
 
 service Services {
-  rpc ChatService(stream FromClient) returns (stream FromServer) {};
+  rpc ChatService(StreamRequest) returns (stream FromServer) {};
+  rpc SendMessage(FromClient) returns (google.protobuf.Empty) {};
   rpc CommandService (Command) returns (google.protobuf.Empty) {};
   rpc GetClients(google.protobuf.Empty) returns (Clients) {};
-  rpc VerifyName(ClientName) returns (ClientNameResponse) {};
+  rpc CreateClient(ClientName) returns (ClientNameResponse) {};
+  rpc RemoveClient(Client) returns (google.protobuf.Empty) {};
+  rpc VerifyName(ClientName) returns (Exists) {};
 }

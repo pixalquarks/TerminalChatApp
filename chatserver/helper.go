@@ -3,6 +3,8 @@ package chatserver
 import (
 	"errors"
 	"fmt"
+	"log"
+	"math/rand"
 	"regexp"
 	"strings"
 )
@@ -34,7 +36,7 @@ func GetNamesFromCommandString(command string) ([]string, string, error) {
 	return namesArr, command[t[1]:], nil
 }
 
-func VerifyName(name string) (bool, error) {
+func VerifyNameCharacters(name string) (bool, error) {
 	r, err := regexp.Compile("^[A-Za-z0-9_]+$")
 	if err != nil {
 		return false, errors.New("error while compiling regexp")
@@ -42,36 +44,17 @@ func VerifyName(name string) (bool, error) {
 	return r.MatchString(name), nil
 }
 
-func GetNamesFromClientStruct(clientStructs map[int]User) []string {
-	names := make([]string, len(clientStructs))
-	i := 0
-	for _, user := range clientStructs {
-		names[i] = user.Name
-		i++
-	}
-	return names
-}
+func AppendMessage(clientName string, cUniqCode int32, message string, to []User) {
+	messageHandleObject.mu.Lock()
+	defer messageHandleObject.mu.Unlock()
 
-type Set struct {
-	store map[uint32]bool
-}
+	messageHandleObject.MQue = append(messageHandleObject.MQue, messageUnit{
+		ClientName:        clientName,
+		ClientUniqueCode:  cUniqCode,
+		MessageBody:       message,
+		MessageUniqueCode: rand.Intn(1e8),
+		To:                to,
+	})
 
-func (s *Set) Add(key uint32) {
-	s.store[key] = true
-}
-
-func (s *Set) Remove(key uint32) {
-	delete(s.store, key)
-}
-
-func (s *Set) Contains(key uint32) bool {
-	return s.store[key] == true
-}
-
-func (s *Set) Size() int {
-	return len(s.store)
-}
-
-func (s *Set) Iter() map[uint32]bool {
-	return s.store
+	log.Printf("%v", messageHandleObject.MQue[len(messageHandleObject.MQue)-1])
 }

@@ -3,13 +3,12 @@ package chatserver
 import (
 	"fmt"
 	"log"
-	"math/rand"
 	"sync"
 )
 
 type messageUnit struct {
 	ClientName        string
-	ClientUniqueCode  int
+	ClientUniqueCode  int32
 	MessageBody       string
 	MessageUniqueCode int
 	To                []User
@@ -24,66 +23,14 @@ var messageHandleObject = messageHandle{}
 
 type User struct {
 	Name   string
-	Uid    int
+	Uid    int32
 	Server Services_ChatServiceServer
 }
 
 type ChatServer struct {
-	Clients   map[int]User
-	NameToUid map[string]int
+	Clients   map[int32]User
+	NameToUid map[string]int32
 	Mu        sync.RWMutex
-}
-
-func (is *ChatServer) addClient(uid int, srv Services_ChatServiceServer) {
-	is.Mu.Lock()
-	defer is.Mu.Unlock()
-	log.Println("adding new client", uid)
-	is.Clients[uid] = User{
-		Name:   "",
-		Uid:    uid,
-		Server: srv,
-	}
-}
-
-func (is *ChatServer) removeClient(uid int) {
-	is.Mu.Lock()
-	t := is.Clients[uid]
-	name := t.Name
-	delete(is.NameToUid, is.Clients[uid].Name)
-	delete(is.Clients, uid)
-	is.Mu.Unlock()
-	log.Println(name)
-	//
-	messageHandleObject.mu.Lock()
-	messageHandleObject.MQue = append(messageHandleObject.MQue, messageUnit{
-		ClientName:        "server",
-		ClientUniqueCode:  uid,
-		MessageBody:       fmt.Sprintf("%v left has the chat", name),
-		MessageUniqueCode: rand.Intn(1e8),
-		To:                is.getClientsArray(),
-	})
-	//
-	messageHandleObject.mu.Unlock()
-
-}
-
-func (is *ChatServer) getClientsArray() []User {
-	arr := make([]User, 0)
-	for _, user := range is.getClients() {
-		arr = append(arr, user)
-	}
-	return arr
-}
-
-func (is *ChatServer) getClients() map[int]User {
-	cs := make(map[int]User)
-
-	is.Mu.RLock()
-	defer is.Mu.RUnlock()
-	for k, v := range is.Clients {
-		cs[k] = v
-	}
-	return cs
 }
 
 func (is *ChatServer) mustEmbedUnimplementedServicesServer() {
@@ -91,18 +38,20 @@ func (is *ChatServer) mustEmbedUnimplementedServicesServer() {
 	panic("implement me")
 }
 
-func (is *ChatServer) ChatService(csi Services_ChatServiceServer) error {
-	clientUniqueCode := rand.Intn(1e6)
-	log.Printf("New user with uniqueID :: %v", clientUniqueCode)
+func (is *ChatServer) ChatService(req *StreamRequest, csi Services_ChatServiceServer) error {
 	errChannel := make(chan error)
-
-	is.addClient(clientUniqueCode, csi)
-	defer is.removeClient(clientUniqueCode)
+	is.Mu.Lock()
+	id := req.Id
+	name := is.Clients[id].Name
+	is.Mu.Unlock()
+	is.addClient(id, csi)
+	defer is.removeClient(id)
 	defer log.Printf("client removed successfully successfully")
 	log.Println("New chat service created")
 
-	// receive message
-	go is.receiveFromStream(csi, clientUniqueCode, errChannel)
+	message := fmt.Sprintf("%v has entered the chat", name)
+	AppendMessage("server", -1, message, is.getClientsArray())
+
 	// send message
 	go is.sendToStream(errChannel)
 

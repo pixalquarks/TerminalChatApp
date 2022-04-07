@@ -19,10 +19,13 @@ const _ = grpc.SupportPackageIsVersion7
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type ServicesClient interface {
-	ChatService(ctx context.Context, opts ...grpc.CallOption) (Services_ChatServiceClient, error)
+	ChatService(ctx context.Context, in *StreamRequest, opts ...grpc.CallOption) (Services_ChatServiceClient, error)
+	SendMessage(ctx context.Context, in *FromClient, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	CommandService(ctx context.Context, in *Command, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	GetClients(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*Clients, error)
-	VerifyName(ctx context.Context, in *ClientName, opts ...grpc.CallOption) (*ClientNameResponse, error)
+	CreateClient(ctx context.Context, in *ClientName, opts ...grpc.CallOption) (*ClientNameResponse, error)
+	RemoveClient(ctx context.Context, in *Client, opts ...grpc.CallOption) (*emptypb.Empty, error)
+	VerifyName(ctx context.Context, in *ClientName, opts ...grpc.CallOption) (*Exists, error)
 }
 
 type servicesClient struct {
@@ -33,17 +36,22 @@ func NewServicesClient(cc grpc.ClientConnInterface) ServicesClient {
 	return &servicesClient{cc}
 }
 
-func (c *servicesClient) ChatService(ctx context.Context, opts ...grpc.CallOption) (Services_ChatServiceClient, error) {
+func (c *servicesClient) ChatService(ctx context.Context, in *StreamRequest, opts ...grpc.CallOption) (Services_ChatServiceClient, error) {
 	stream, err := c.cc.NewStream(ctx, &Services_ServiceDesc.Streams[0], "/pixalquarks.terminalChatServer.Services/ChatService", opts...)
 	if err != nil {
 		return nil, err
 	}
 	x := &servicesChatServiceClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
 	return x, nil
 }
 
 type Services_ChatServiceClient interface {
-	Send(*FromClient) error
 	Recv() (*FromServer, error)
 	grpc.ClientStream
 }
@@ -52,16 +60,21 @@ type servicesChatServiceClient struct {
 	grpc.ClientStream
 }
 
-func (x *servicesChatServiceClient) Send(m *FromClient) error {
-	return x.ClientStream.SendMsg(m)
-}
-
 func (x *servicesChatServiceClient) Recv() (*FromServer, error) {
 	m := new(FromServer)
 	if err := x.ClientStream.RecvMsg(m); err != nil {
 		return nil, err
 	}
 	return m, nil
+}
+
+func (c *servicesClient) SendMessage(ctx context.Context, in *FromClient, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	out := new(emptypb.Empty)
+	err := c.cc.Invoke(ctx, "/pixalquarks.terminalChatServer.Services/SendMessage", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (c *servicesClient) CommandService(ctx context.Context, in *Command, opts ...grpc.CallOption) (*emptypb.Empty, error) {
@@ -82,8 +95,26 @@ func (c *servicesClient) GetClients(ctx context.Context, in *emptypb.Empty, opts
 	return out, nil
 }
 
-func (c *servicesClient) VerifyName(ctx context.Context, in *ClientName, opts ...grpc.CallOption) (*ClientNameResponse, error) {
+func (c *servicesClient) CreateClient(ctx context.Context, in *ClientName, opts ...grpc.CallOption) (*ClientNameResponse, error) {
 	out := new(ClientNameResponse)
+	err := c.cc.Invoke(ctx, "/pixalquarks.terminalChatServer.Services/CreateClient", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *servicesClient) RemoveClient(ctx context.Context, in *Client, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	out := new(emptypb.Empty)
+	err := c.cc.Invoke(ctx, "/pixalquarks.terminalChatServer.Services/RemoveClient", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *servicesClient) VerifyName(ctx context.Context, in *ClientName, opts ...grpc.CallOption) (*Exists, error) {
+	out := new(Exists)
 	err := c.cc.Invoke(ctx, "/pixalquarks.terminalChatServer.Services/VerifyName", in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -95,10 +126,13 @@ func (c *servicesClient) VerifyName(ctx context.Context, in *ClientName, opts ..
 // All implementations must embed UnimplementedServicesServer
 // for forward compatibility
 type ServicesServer interface {
-	ChatService(Services_ChatServiceServer) error
+	ChatService(*StreamRequest, Services_ChatServiceServer) error
+	SendMessage(context.Context, *FromClient) (*emptypb.Empty, error)
 	CommandService(context.Context, *Command) (*emptypb.Empty, error)
 	GetClients(context.Context, *emptypb.Empty) (*Clients, error)
-	VerifyName(context.Context, *ClientName) (*ClientNameResponse, error)
+	CreateClient(context.Context, *ClientName) (*ClientNameResponse, error)
+	RemoveClient(context.Context, *Client) (*emptypb.Empty, error)
+	VerifyName(context.Context, *ClientName) (*Exists, error)
 	mustEmbedUnimplementedServicesServer()
 }
 
@@ -106,8 +140,11 @@ type ServicesServer interface {
 type UnimplementedServicesServer struct {
 }
 
-func (UnimplementedServicesServer) ChatService(Services_ChatServiceServer) error {
+func (UnimplementedServicesServer) ChatService(*StreamRequest, Services_ChatServiceServer) error {
 	return status.Errorf(codes.Unimplemented, "method ChatService not implemented")
+}
+func (UnimplementedServicesServer) SendMessage(context.Context, *FromClient) (*emptypb.Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SendMessage not implemented")
 }
 func (UnimplementedServicesServer) CommandService(context.Context, *Command) (*emptypb.Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CommandService not implemented")
@@ -115,7 +152,13 @@ func (UnimplementedServicesServer) CommandService(context.Context, *Command) (*e
 func (UnimplementedServicesServer) GetClients(context.Context, *emptypb.Empty) (*Clients, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetClients not implemented")
 }
-func (UnimplementedServicesServer) VerifyName(context.Context, *ClientName) (*ClientNameResponse, error) {
+func (UnimplementedServicesServer) CreateClient(context.Context, *ClientName) (*ClientNameResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CreateClient not implemented")
+}
+func (UnimplementedServicesServer) RemoveClient(context.Context, *Client) (*emptypb.Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RemoveClient not implemented")
+}
+func (UnimplementedServicesServer) VerifyName(context.Context, *ClientName) (*Exists, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method VerifyName not implemented")
 }
 func (UnimplementedServicesServer) mustEmbedUnimplementedServicesServer() {}
@@ -132,12 +175,15 @@ func RegisterServicesServer(s grpc.ServiceRegistrar, srv ServicesServer) {
 }
 
 func _Services_ChatService_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(ServicesServer).ChatService(&servicesChatServiceServer{stream})
+	m := new(StreamRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(ServicesServer).ChatService(m, &servicesChatServiceServer{stream})
 }
 
 type Services_ChatServiceServer interface {
 	Send(*FromServer) error
-	Recv() (*FromClient, error)
 	grpc.ServerStream
 }
 
@@ -149,12 +195,22 @@ func (x *servicesChatServiceServer) Send(m *FromServer) error {
 	return x.ServerStream.SendMsg(m)
 }
 
-func (x *servicesChatServiceServer) Recv() (*FromClient, error) {
-	m := new(FromClient)
-	if err := x.ServerStream.RecvMsg(m); err != nil {
+func _Services_SendMessage_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(FromClient)
+	if err := dec(in); err != nil {
 		return nil, err
 	}
-	return m, nil
+	if interceptor == nil {
+		return srv.(ServicesServer).SendMessage(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/pixalquarks.terminalChatServer.Services/SendMessage",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ServicesServer).SendMessage(ctx, req.(*FromClient))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _Services_CommandService_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -193,6 +249,42 @@ func _Services_GetClients_Handler(srv interface{}, ctx context.Context, dec func
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Services_CreateClient_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ClientName)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ServicesServer).CreateClient(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/pixalquarks.terminalChatServer.Services/CreateClient",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ServicesServer).CreateClient(ctx, req.(*ClientName))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Services_RemoveClient_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Client)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ServicesServer).RemoveClient(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/pixalquarks.terminalChatServer.Services/RemoveClient",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ServicesServer).RemoveClient(ctx, req.(*Client))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Services_VerifyName_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ClientName)
 	if err := dec(in); err != nil {
@@ -219,12 +311,24 @@ var Services_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*ServicesServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
+			MethodName: "SendMessage",
+			Handler:    _Services_SendMessage_Handler,
+		},
+		{
 			MethodName: "CommandService",
 			Handler:    _Services_CommandService_Handler,
 		},
 		{
 			MethodName: "GetClients",
 			Handler:    _Services_GetClients_Handler,
+		},
+		{
+			MethodName: "CreateClient",
+			Handler:    _Services_CreateClient_Handler,
+		},
+		{
+			MethodName: "RemoveClient",
+			Handler:    _Services_RemoveClient_Handler,
 		},
 		{
 			MethodName: "VerifyName",
@@ -236,7 +340,6 @@ var Services_ServiceDesc = grpc.ServiceDesc{
 			StreamName:    "ChatService",
 			Handler:       _Services_ChatService_Handler,
 			ServerStreams: true,
-			ClientStreams: true,
 		},
 	},
 	Metadata: "proto/chat.proto",

@@ -1,14 +1,20 @@
 gen:
 	protoc --go_out=. --go-grpc_out=. proto/*.proto
 
-gents:
-	protoc -I=".\Client\src\proto" --ts_out=".\Client\src\proto" chat.proto
-
 clean:
 	rm pb/*.go
 
 server:
 	go run server.go
 
-goClient:
+client:
 	go run client.go helper.go
+
+ui:
+	go run ./Client
+
+buildClient:
+	go build -o ./build ./Client
+
+buildServer:
+	go build -o ./build server.go

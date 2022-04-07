@@ -29,11 +29,12 @@ func main() {
 
 	// register chat server
 	cs := chatserver.ChatServer{
-		Clients:   make(map[int]chatserver.User),
-		NameToUid: make(map[string]int),
+		Clients:   make(map[int32]chatserver.User),
+		NameToUid: make(map[string]int32),
 		Mu:        sync.RWMutex{},
 	}
 	chatserver.RegisterServicesServer(grpcServer, &cs)
+	go cs.CheckOnClients()
 	err = grpcServer.Serve(listen)
 	if err != nil {
 		log.Fatalf("Failed to start gRPC server :: %v", err)

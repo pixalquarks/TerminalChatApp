@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/emptypb"
+	"io"
 	"log"
 	"os"
 	"pixalquarks.terminalChatServer/chatserver"
@@ -33,33 +34,38 @@ func main() {
 	}
 	//
 	defer func() {
+		log.Printf("Closing client")
 		if err := conn.Close(); err != nil {
 			log.Printf("Could not close the connection :: %v", err)
 		}
 	}()
 	//
 	client := chatserver.NewServicesClient(conn)
-	stream, err := client.ChatService(context.Background())
-
 	if err != nil {
 		log.Fatalf("Failed to call ChatService :: %v", err)
 	}
 
 	// implement communication with gRPC server
-	ch := clientHandle{stream: stream, client: client}
+	ch := clientHandle{client: client}
 	ch.clientConfig()
+	stream, err := client.ChatService(context.Background(), &chatserver.StreamRequest{
+		Id: int32(ch.uid),
+	})
+	ch.stream = stream
+	bl := make(chan bool)
 	go ch.sendMessage()
 	go ch.receiveMessage()
 	//
 	//// blocker
-	bl := make(chan bool)
 	<-bl
+	fmt.Println("closing the connection")
 }
 
 type clientHandle struct {
 	client     chatserver.ServicesClient
 	stream     chatserver.Services_ChatServiceClient
 	clientName string
+	uid        int32
 }
 
 func (ch *clientHandle) clientConfig() {
@@ -75,7 +81,7 @@ func (ch *clientHandle) clientConfig() {
 			fmt.Println("Error while verifying name, please try again")
 		} else {
 			if t {
-				resp, err := ch.client.VerifyName(context.Background(), &chatserver.ClientName{
+				resp, err := ch.client.CreateClient(context.Background(), &chatserver.ClientName{
 					Name: name,
 				})
 				if err != nil {
@@ -83,6 +89,7 @@ func (ch *clientHandle) clientConfig() {
 				}
 				if !resp.Exists {
 					ch.clientName = strings.Trim(name, "\r\n")
+					ch.uid = resp.Id
 					break
 				} else {
 					fmt.Println("This name is already taken")
@@ -91,18 +98,6 @@ func (ch *clientHandle) clientConfig() {
 				fmt.Println("Name should only contain alphanumeric characters and underscore")
 			}
 		}
-
-	}
-
-	clientMessage := ""
-	clientMessageBox := &chatserver.FromClient{
-		Name: ch.clientName,
-		Body: clientMessage,
-	}
-	err := ch.stream.Send(clientMessageBox)
-
-	if err != nil {
-		log.Printf("Error while sending message :: %v", err)
 	}
 }
 
@@ -112,6 +107,19 @@ func (ch *clientHandle) sendMessage() {
 	for {
 		reader := bufio.NewReader(os.Stdin)
 		clientMessage, err := reader.ReadString('\n')
+		if err == io.EOF {
+			//log.Fatalf("Quitting the chat")
+			_, err := ch.client.RemoveClient(context.Background(), &chatserver.Client{
+				Name: ch.clientName,
+				Id:   int32(ch.uid),
+			})
+			if err != nil {
+				fmt.Println("Unable to remove client")
+			}
+
+			log.Fatalf("Quitting the chat")
+			return
+		}
 		if err != nil {
 			log.Fatalf("Failed to read from console :: %v, message: %v", err, clientMessage)
 		}
@@ -134,9 +142,9 @@ func (ch *clientHandle) sendMessage() {
 				}
 			} else if command == 'P' || command == 'p' {
 				if _, err := ch.client.CommandService(context.Background(), &chatserver.Command{
-					Type:   uint32(command),
-					Value:  msg[2:],
-					Client: ch.clientName,
+					Type:  uint32(command),
+					Value: msg[2:],
+					Id:    int32(ch.uid),
 				}); err != nil {
 					log.Printf("Error while executing commnad")
 				} else {
@@ -146,10 +154,10 @@ func (ch *clientHandle) sendMessage() {
 		} else {
 
 			clientMessageBox := &chatserver.FromClient{
-				Name: ch.clientName,
+				Id:   int32(ch.uid),
 				Body: msg,
 			}
-			err = ch.stream.Send(clientMessageBox)
+			_, err := ch.client.SendMessage(context.Background(), clientMessageBox)
 
 			if err != nil {
 				log.Printf("Error while sending message :: %v", err)
@@ -165,10 +173,13 @@ func (ch *clientHandle) receiveMessage() {
 		if err != nil {
 			log.Printf("Error while receiving message :: %v", err)
 		}
-		if msg.Name == "server" {
-			fmt.Printf("***** System Message : %s *****\n", msg.Body)
-		} else {
-			fmt.Printf("%s :: %s \n", msg.Name, msg.Body)
+		if msg != nil {
+			if msg.Name == "server" {
+				fmt.Printf("***** System Message : %s *****\n", msg.Body)
+			} else {
+				fmt.Printf("%s :: %s \n", msg.Name, msg.Body)
+			}
 		}
+
 	}
 }

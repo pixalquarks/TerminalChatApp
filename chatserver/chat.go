@@ -1,36 +1,22 @@
 package chatserver
 
 import (
-	"fmt"
-	"log"
-	"math/rand"
+	"context"
+	"errors"
+	"google.golang.org/protobuf/types/known/emptypb"
 	"time"
 )
 
-// receive message
-func (is *ChatServer) receiveFromStream(csi_ Services_ChatServiceServer, clientUniqueCode_ int, errChannel_ chan error) {
-
-	for {
-		msg, err := csi_.Recv()
-		if err != nil {
-			log.Printf("Error receiving message from client :: %v", err)
-			errChannel_ <- err
-		} else {
-			messageHandleObject.mu.Lock()
-
-			messageHandleObject.MQue = append(messageHandleObject.MQue, messageUnit{
-				ClientName:        msg.Name,
-				ClientUniqueCode:  clientUniqueCode_,
-				MessageBody:       msg.Body,
-				MessageUniqueCode: rand.Intn(1e8),
-				To:                is.getClientsArray(),
-			})
-
-			messageHandleObject.mu.Unlock()
-
-			log.Printf("%v", messageHandleObject.MQue[len(messageHandleObject.MQue)-1])
-		}
+func (is *ChatServer) SendMessage(_ context.Context, msg *FromClient) (*emptypb.Empty, error) {
+	is.Mu.Lock()
+	id := msg.Id
+	user, ok := is.Clients[id]
+	if !ok {
+		return &emptypb.Empty{}, errors.New("couldn't find the name")
 	}
+	is.Mu.Unlock()
+	AppendMessage(user.Name, msg.Id, msg.Body, is.getClientsArray())
+	return &emptypb.Empty{}, nil
 }
 
 // send message
@@ -52,21 +38,13 @@ func (is *ChatServer) sendToStream(errChannel_ chan error) {
 			SendTo := messageHandleObject.MQue[0].To
 
 			messageHandleObject.mu.Unlock()
-			// TODO: when someone enters the chat, the message is sent multiple of time. Fix it later
-			if message4Client == "" {
-				is.Mu.Lock()
-				t := is.Clients[senderUniqueCode]
-				t.Name = senderName4Client
-				is.NameToUid[t.Name] = t.Uid
-				is.Clients[senderUniqueCode] = t
-				log.Printf("%v", is.NameToUid)
-				is.Mu.Unlock()
-				message4Client = fmt.Sprintf("%v has entered the chat", senderName4Client)
-				senderName4Client = "server"
-			}
 
-			for uid, user := range SendTo {
-				if senderUniqueCode != uid {
+			for _, user := range SendTo {
+				if senderUniqueCode != user.Uid && user.Server != nil {
+					if user.Server.Context().Err() == context.Canceled {
+						is.removeClient(user.Uid)
+						continue
+					}
 					err := user.Server.Send(&FromServer{
 						Name: senderName4Client,
 						Body: message4Client,
