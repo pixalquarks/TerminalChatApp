@@ -13,7 +13,6 @@ func (is *ChatServer) CommandService(_ context.Context, command *Command) (*empt
 	cmd := rune(command.Type)
 	switch cmd {
 	case 'p', 'P':
-		log.Println(command.Value)
 		names, msg, err := GetNamesFromCommandString(command.Value)
 		if err != nil {
 			return &emptypb.Empty{}, err
@@ -63,9 +62,7 @@ func (is *ChatServer) CommandService(_ context.Context, command *Command) (*empt
 }
 
 func (is *ChatServer) GetClients(_ context.Context, _ *emptypb.Empty) (*Clients, error) {
-	log.Printf("GetClients command \n")
 	clientsMap := is.getClients()
-	log.Println(clientsMap)
 	l := len(clientsMap)
 	clientArr := make([]*Client, l)
 	count := 0
@@ -77,7 +74,6 @@ func (is *ChatServer) GetClients(_ context.Context, _ *emptypb.Empty) (*Clients,
 		}
 		count++
 	}
-	log.Println(clientArr)
 	clients := &Clients{
 		Client: clientArr,
 		Count:  uint32(count),
@@ -87,9 +83,7 @@ func (is *ChatServer) GetClients(_ context.Context, _ *emptypb.Empty) (*Clients,
 }
 
 func (is *ChatServer) CreateClient(_ context.Context, clientName *ClientName) (*ClientNameResponse, error) {
-	log.Println(is.NameToUid)
 	_, ok := is.NameToUid[clientName.Name]
-	log.Println(ok)
 	if ok {
 		fmt.Printf("from create client : client with name %s already exists\n", clientName.Name)
 		return &ClientNameResponse{
@@ -105,7 +99,6 @@ func (is *ChatServer) CreateClient(_ context.Context, clientName *ClientName) (*
 		Uid:  clientUniqueCode,
 	}
 	is.NameToUid[clientName.Name] = clientUniqueCode
-	log.Printf("from create client :: client : %v  name : %v", is.Clients[clientUniqueCode], clientName.Name)
 	is.Mu.Unlock()
 	defer fmt.Println("verified")
 	return &ClientNameResponse{
@@ -127,7 +120,6 @@ func (is *ChatServer) VerifyName(_ context.Context, name *ClientName) (*Exists, 
 		}, errors.New("name should only contain alphanumeric characters and underscore")
 	}
 	_, ok := is.NameToUid[name.Name]
-	log.Println(ok)
 	return &Exists{
 		Exists: ok,
 	}, nil

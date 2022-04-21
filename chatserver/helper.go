@@ -3,7 +3,6 @@ package chatserver
 import (
 	"errors"
 	"fmt"
-	"log"
 	"math/rand"
 	"regexp"
 	"strings"
@@ -55,6 +54,4 @@ func AppendMessage(clientName string, cUniqCode int32, message string, to []User
 		MessageUniqueCode: rand.Intn(1e8),
 		To:                to,
 	})
-
-	log.Printf("%v", messageHandleObject.MQue[len(messageHandleObject.MQue)-1])
 }

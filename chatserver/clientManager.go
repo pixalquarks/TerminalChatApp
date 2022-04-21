@@ -13,7 +13,6 @@ func (is *ChatServer) addClient(uid int32, srv Services_ChatServiceServer) {
 	defer is.Mu.Unlock()
 	log.Println("adding new client", uid)
 	t := is.Clients[uid]
-	log.Printf("from add client :: %v", t)
 	t.Server = srv
 	is.Clients[uid] = t
 	fmt.Println(is.Clients)
@@ -26,7 +25,7 @@ func (is *ChatServer) removeClient(uid int32) {
 	delete(is.NameToUid, is.Clients[uid].Name)
 	delete(is.Clients, uid)
 	is.Mu.Unlock()
-	log.Println(name)
+	log.Println("remover client", name)
 	//
 	messageHandleObject.mu.Lock()
 	messageHandleObject.MQue = append(messageHandleObject.MQue, messageUnit{
