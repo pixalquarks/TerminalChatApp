@@ -17,6 +17,8 @@ type clientHandle struct {
 	client     chatserver.ServicesClient
 	stream     chatserver.Services_ChatServiceClient
 	clientName string
+	roomName   string
+	delay      int
 	uid        int32
 }
 
@@ -39,7 +41,9 @@ func GetConnection() (*grpc.ClientConn, error) {
 
 func CreateClient(conn *grpc.ClientConn) (*clientHandle, error) {
 	client := chatserver.NewServicesClient(conn)
-	// implement communication with gRPC server
+	if client == nil {
+		return nil, errors.New("could not create client")
+	}
 	ch := clientHandle{client: client}
 	name, err := ch.GetName()
 	if err != nil {
@@ -58,6 +62,18 @@ func CreateClient(conn *grpc.ClientConn) (*clientHandle, error) {
 	return &ch, nil
 }
 
+func (ch *clientHandle) GetUserNames() ([]string, error) {
+	clientsArr, err := ch.client.GetClients(context.Background(), &emptypb.Empty{})
+	if err != nil {
+		return nil, err
+	}
+	arr := make([]string, 0)
+	for _, v := range clientsArr.Client {
+		arr = append(arr, v.Name)
+	}
+	return arr, nil
+}
+
 func (ch *clientHandle) GetName() (string, error) {
 	for {
 		reader := bufio.NewReader(os.Stdin)
@@ -68,14 +84,14 @@ func (ch *clientHandle) GetName() (string, error) {
 		}
 		name = strings.Trim(name, "\r\n")
 		if t, err := VerifyNameCharacters(name); err != nil {
-			fmt.Println("Error while verifying name, please try again")
+			fmt.Println(err.Error())
 		} else {
 			if t {
 				resp, err := ch.client.VerifyName(context.Background(), &chatserver.ClientName{
 					Name: name,
 				})
 				if err != nil {
-					fmt.Println("Error while verifying name, please try again")
+					return "", err
 				}
 				if !resp.Exists {
 					return name, nil
@@ -98,11 +114,13 @@ func (ch *clientHandle) Config(name string) error {
 				Name: name,
 			})
 			if err != nil {
-				return errors.New("error while verifying name, please try again")
+				return err
 			}
-			if !resp.Exists {
+			if !resp.Created {
 				ch.clientName = name
 				ch.uid = resp.Id
+				ch.roomName = resp.RoomName
+				ch.delay = int(resp.Delay)
 			} else {
 				fmt.Println("This name is already taken")
 			}
@@ -129,7 +147,6 @@ func (ch *clientHandle) sendMessage(msg string) error {
 	if msg[0] == '!' {
 		command := msg[1]
 		if command == 'L' || command == 'l' {
-			fmt.Println("command")
 			if t, err := ch.client.GetClients(context.Background(), &emptypb.Empty{}); err != nil {
 				return errors.New(fmt.Sprintf("Error while executing command :: %v", err))
 			} else {
@@ -145,9 +162,13 @@ func (ch *clientHandle) sendMessage(msg string) error {
 				Value: msg[2:],
 				Id:    int32(ch.uid),
 			}); err != nil {
-				log.Printf("Error while executing commnad")
+				if er := LogOut(err.Error()); er != nil {
+					log.Println(er)
+				}
 			} else {
-				fmt.Println("Command executed successfully")
+				if err := LogOut("command executed successfully"); err != nil {
+					log.Println(err)
+				}
 			}
 		}
 	} else {
@@ -166,7 +187,7 @@ func (ch *clientHandle) sendMessage(msg string) error {
 }
 
 // receive message
-func (ch *clientHandle) receiveMessage(out func(message string)) {
+func (ch *clientHandle) receiveMessage(out func(sender string, message string)) {
 	for {
 		msg, err := ch.stream.Recv()
 		if err != nil {
@@ -175,11 +196,12 @@ func (ch *clientHandle) receiveMessage(out func(message string)) {
 		}
 		if msg != nil {
 			if msg.Name == "server" {
-				m := fmt.Sprintf("***** System Message : %s *****\n", msg.Body)
-				out(m)
+				UpdateUserList()
+				//m := fmt.Sprintf("***** System Message : %s *****\n", msg.Body)
+				out(msg.Name, msg.Body)
 			} else {
-				m := fmt.Sprintf("%s :: %s \n", msg.Name, msg.Body)
-				out(m)
+				//m := fmt.Sprintf("%s :: %s \n", msg.Name, msg.Body)
+				out(msg.Name, msg.Body)
 			}
 		}
 	}

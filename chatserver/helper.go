@@ -8,12 +8,10 @@ import (
 	"strings"
 )
 
-// TODO: parsing is unable to separate names from message
-
 func GetNamesFromCommandString(command string) ([]string, string, error) {
 	r, err := regexp.Compile("^[[A-Za-z0-9_,]+]")
 	if err != nil {
-		return make([]string, 0), "", errors.New("could not compile regexp")
+		return make([]string, 0), "", err
 	}
 	match := r.MatchString(command)
 	if !match {
@@ -38,7 +36,7 @@ func GetNamesFromCommandString(command string) ([]string, string, error) {
 func VerifyNameCharacters(name string) (bool, error) {
 	r, err := regexp.Compile("^[A-Za-z0-9_]+$")
 	if err != nil {
-		return false, errors.New("error while compiling regexp")
+		return false, err
 	}
 	return r.MatchString(name), nil
 }
@@ -54,4 +52,12 @@ func AppendMessage(clientName string, cUniqCode int32, message string, to []User
 		MessageUniqueCode: rand.Intn(1e8),
 		To:                to,
 	})
+}
+
+func IsRoomFull(serv *ChatServer) bool {
+	t := len(serv.Clients)
+	fmt.Println(t, serv.RoomSize)
+	b := t >= int(serv.RoomSize)
+	fmt.Println(b)
+	return len(serv.Clients) >= int(serv.RoomSize)
 }

@@ -29,31 +29,18 @@ func (is *ChatServer) CommandService(_ context.Context, command *Command) (*empt
 			}
 		}
 		is.Mu.Unlock()
-		messageHandleObject.mu.Lock()
 		id := command.Id
 		user, ok := is.Clients[id]
 		if !ok {
 			return &emptypb.Empty{}, errors.New("error finding the sender name")
 		}
-		messageHandleObject.MQue = append(messageHandleObject.MQue, messageUnit{
-			ClientName:        user.Name,
-			ClientUniqueCode:  id,
-			MessageBody:       msg,
-			MessageUniqueCode: rand.Intn(1e8),
-			To:                writtenNames,
-		})
+
+		AppendMessage(user.Name, id, msg, writtenNames)
+
 		if len(errNames) > 0 {
-			messageHandleObject.MQue = append(messageHandleObject.MQue, messageUnit{
-				ClientName:        "server",
-				ClientUniqueCode:  id,
-				MessageBody:       fmt.Sprintf("Could not find %v names in chat room", errNames),
-				MessageUniqueCode: rand.Intn(1e8),
-				To: []User{
-					user,
-				},
-			})
+			msg := fmt.Sprintf("Could not find %v names in chat room", errNames)
+			AppendMessage("server", -1, msg, []User{user})
 		}
-		messageHandleObject.mu.Unlock()
 	default:
 		return &emptypb.Empty{}, errors.New("no such command exists")
 	}
@@ -82,14 +69,20 @@ func (is *ChatServer) GetClients(_ context.Context, _ *emptypb.Empty) (*Clients,
 	return clients, nil
 }
 
-func (is *ChatServer) CreateClient(_ context.Context, clientName *ClientName) (*ClientNameResponse, error) {
+func (is *ChatServer) CreateClient(_ context.Context, clientName *ClientName) (*CreateClientResponse, error) {
 	_, ok := is.NameToUid[clientName.Name]
+	log.Println("creating client", clientName.Name)
+	if IsRoomFull(is) {
+		log.Println("room is full")
+		return &CreateClientResponse{
+			Created: false,
+		}, errors.New("room if full")
+	}
 	if ok {
 		fmt.Printf("from create client : client with name %s already exists\n", clientName.Name)
-		return &ClientNameResponse{
-			Exists: ok,
-			Id:     -1,
-		}, nil
+		return &CreateClientResponse{
+			Created: false,
+		}, errors.New("client with same name already exists")
 	}
 	clientUniqueCode := rand.Int31n(1e6)
 	log.Printf("New user with uniqueID :: %v", clientUniqueCode)
@@ -101,9 +94,11 @@ func (is *ChatServer) CreateClient(_ context.Context, clientName *ClientName) (*
 	is.NameToUid[clientName.Name] = clientUniqueCode
 	is.Mu.Unlock()
 	defer fmt.Println("verified")
-	return &ClientNameResponse{
-		Exists: ok,
-		Id:     clientUniqueCode,
+	return &CreateClientResponse{
+		Created:  ok,
+		Id:       clientUniqueCode,
+		RoomName: is.Name,
+		Delay:    uint32(is.Delay),
 	}, nil
 }
 
@@ -120,6 +115,7 @@ func (is *ChatServer) VerifyName(_ context.Context, name *ClientName) (*Exists, 
 		}, errors.New("name should only contain alphanumeric characters and underscore")
 	}
 	_, ok := is.NameToUid[name.Name]
+	log.Println("name verified")
 	return &Exists{
 		Exists: ok,
 	}, nil

@@ -22,15 +22,19 @@ type messageHandle struct {
 var messageHandleObject = messageHandle{}
 
 type User struct {
-	Name   string
-	Uid    int32
-	Server Services_ChatServiceServer
+	Name    string
+	Uid     int32
+	Server  Services_ChatServiceServer
+	CanSend bool
 }
 
 type ChatServer struct {
+	Name      string
+	RoomSize  uint
 	Clients   map[int32]User
 	NameToUid map[string]int32
 	Mu        sync.RWMutex
+	Delay     uint
 }
 
 func (is *ChatServer) mustEmbedUnimplementedServicesServer() {

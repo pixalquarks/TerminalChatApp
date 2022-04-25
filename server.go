@@ -1,17 +1,21 @@
 package main
 
 import (
+	"fmt"
 	"google.golang.org/grpc"
 	"log"
 	"net"
-	"os"
 	"pixalquarks.terminalChatServer/chatserver"
 	"sync"
 )
 
 func main() {
-
-	Port := os.Getenv("PORT")
+	servVars, err := GetServerVariables()
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	Port := servVars.Port
 
 	if Port == "" {
 		Port = "5000" // default port
@@ -29,9 +33,12 @@ func main() {
 
 	// register chat server
 	cs := chatserver.ChatServer{
+		Name:      servVars.RoomName,
+		RoomSize:  servVars.RoomSize,
 		Clients:   make(map[int32]chatserver.User),
 		NameToUid: make(map[string]int32),
 		Mu:        sync.RWMutex{},
+		Delay:     servVars.Delay,
 	}
 	chatserver.RegisterServicesServer(grpcServer, &cs)
 	go cs.CheckOnClients()
