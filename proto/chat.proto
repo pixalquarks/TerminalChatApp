@@ -36,9 +36,11 @@ message ClientName {
   string name = 1;
 }
 
-message ClientNameResponse {
-  bool exists = 1;
+message CreateClientResponse {
+  bool created = 1;
   int32 id = 2;
+  string roomName = 3;
+  uint32 delay = 4;
 }
 
 message Exists {
@@ -54,7 +56,7 @@ service Services {
   rpc SendMessage(FromClient) returns (google.protobuf.Empty) {};
   rpc CommandService (Command) returns (google.protobuf.Empty) {};
   rpc GetClients(google.protobuf.Empty) returns (Clients) {};
-  rpc CreateClient(ClientName) returns (ClientNameResponse) {};
+  rpc CreateClient(ClientName) returns (CreateClientResponse) {};
   rpc RemoveClient(Client) returns (google.protobuf.Empty) {};
   rpc VerifyName(ClientName) returns (Exists) {};
 }

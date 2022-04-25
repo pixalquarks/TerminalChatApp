@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"math/rand"
 	"time"
 )
 
@@ -25,18 +24,10 @@ func (is *ChatServer) removeClient(uid int32) {
 	delete(is.NameToUid, is.Clients[uid].Name)
 	delete(is.Clients, uid)
 	is.Mu.Unlock()
-	log.Println("remover client", name)
+	log.Println(name, "left the chat")
 	//
-	messageHandleObject.mu.Lock()
-	messageHandleObject.MQue = append(messageHandleObject.MQue, messageUnit{
-		ClientName:        "server",
-		ClientUniqueCode:  uid,
-		MessageBody:       fmt.Sprintf("%v left has the chat", name),
-		MessageUniqueCode: rand.Intn(1e8),
-		To:                is.getClientsArray(),
-	})
-	//
-	messageHandleObject.mu.Unlock()
+	msg := fmt.Sprintf("%v left has the chat", name)
+	AppendMessage("server", -1, msg, is.getClientsArray())
 
 }
 

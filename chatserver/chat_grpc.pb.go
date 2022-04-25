@@ -23,7 +23,7 @@ type ServicesClient interface {
 	SendMessage(ctx context.Context, in *FromClient, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	CommandService(ctx context.Context, in *Command, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	GetClients(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*Clients, error)
-	CreateClient(ctx context.Context, in *ClientName, opts ...grpc.CallOption) (*ClientNameResponse, error)
+	CreateClient(ctx context.Context, in *ClientName, opts ...grpc.CallOption) (*CreateClientResponse, error)
 	RemoveClient(ctx context.Context, in *Client, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	VerifyName(ctx context.Context, in *ClientName, opts ...grpc.CallOption) (*Exists, error)
 }
@@ -95,8 +95,8 @@ func (c *servicesClient) GetClients(ctx context.Context, in *emptypb.Empty, opts
 	return out, nil
 }
 
-func (c *servicesClient) CreateClient(ctx context.Context, in *ClientName, opts ...grpc.CallOption) (*ClientNameResponse, error) {
-	out := new(ClientNameResponse)
+func (c *servicesClient) CreateClient(ctx context.Context, in *ClientName, opts ...grpc.CallOption) (*CreateClientResponse, error) {
+	out := new(CreateClientResponse)
 	err := c.cc.Invoke(ctx, "/pixalquarks.terminalChatServer.Services/CreateClient", in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -130,7 +130,7 @@ type ServicesServer interface {
 	SendMessage(context.Context, *FromClient) (*emptypb.Empty, error)
 	CommandService(context.Context, *Command) (*emptypb.Empty, error)
 	GetClients(context.Context, *emptypb.Empty) (*Clients, error)
-	CreateClient(context.Context, *ClientName) (*ClientNameResponse, error)
+	CreateClient(context.Context, *ClientName) (*CreateClientResponse, error)
 	RemoveClient(context.Context, *Client) (*emptypb.Empty, error)
 	VerifyName(context.Context, *ClientName) (*Exists, error)
 	mustEmbedUnimplementedServicesServer()
@@ -152,7 +152,7 @@ func (UnimplementedServicesServer) CommandService(context.Context, *Command) (*e
 func (UnimplementedServicesServer) GetClients(context.Context, *emptypb.Empty) (*Clients, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetClients not implemented")
 }
-func (UnimplementedServicesServer) CreateClient(context.Context, *ClientName) (*ClientNameResponse, error) {
+func (UnimplementedServicesServer) CreateClient(context.Context, *ClientName) (*CreateClientResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CreateClient not implemented")
 }
 func (UnimplementedServicesServer) RemoveClient(context.Context, *Client) (*emptypb.Empty, error) {
