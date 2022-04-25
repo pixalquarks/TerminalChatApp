@@ -5,7 +5,7 @@ clean:
 	rm pb/*.go
 
 server:
-	go run server.go
+	go run server.go args.go
 
 client:
 	go run client.go helper.go
@@ -17,4 +17,4 @@ buildClient:
 	go build -o ./build ./Client
 
 buildServer:
-	go build -o ./build server.go
+	go build -o ./build server.go args.go
