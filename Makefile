@@ -7,10 +7,7 @@ clean:
 server:
 	go run server.go args.go
 
-client:
-	go run client.go helper.go
-
-ui:
+goClient:
 	go run ./Client
 
 buildClient:
