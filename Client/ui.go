@@ -4,7 +4,9 @@ import (
 	"errors"
 	"fmt"
 	"github.com/awesome-gocui/gocui"
+	"github.com/fatih/color"
 	"log"
+	"strings"
 	"time"
 )
 
@@ -13,10 +15,14 @@ var (
 	g       *gocui.Gui
 	viewArr = [5]string{"Users", "ChatBox", "Commands", "MessageBox", "Logs"}
 	active  = 0
-	delay   = 0
+	canSend = true
+	greenF  = color.New(color.FgGreen)
+	redF    = color.New(color.FgRed)
+	blue    = color.New(color.FgBlue)
+	magenta = color.New(color.FgMagenta)
 )
 
-const messageDelay = 3 // delay between user can input(in seconds)
+const messageDelay = 1 // delay between user can input(in seconds)
 
 func setCurrentViewOnTop(g *gocui.Gui, name string) (*gocui.View, error) {
 	if _, err := g.SetCurrentView(name); err != nil {
@@ -44,7 +50,7 @@ func nextView(g *gocui.Gui, _ *gocui.View) error {
 }
 
 func OutMessage(g *gocui.Gui, v *gocui.View) error {
-	if delay > 0 {
+	if !canSend {
 		return nil
 	}
 	go setChatTimeout()
@@ -59,14 +65,27 @@ func OutMessage(g *gocui.Gui, v *gocui.View) error {
 		}
 	}
 	msg = "--> " + msg
-	if _, err := fmt.Fprintln(out, msg); err != nil {
+	x, _ := out.Size()
+	t := len(msg)
+	var sb strings.Builder
+	if t < x {
+		dif := x - t
+		for dif > 0 {
+			sb.WriteString(" ")
+			dif--
+		}
+		sb.WriteString(msg)
+	}
+
+	if _, err := fmt.Fprintln(out, sb.String()); err != nil {
 		log.Panicln(err)
 	}
 	v.Clear()
+	go setChatTimeout()
 	return nil
 }
 
-func LogOut(g *gocui.Gui, msg string) error {
+func LogOut(msg string) error {
 	out, err := g.View(viewArr[4])
 	if err != nil {
 		return err
@@ -77,6 +96,37 @@ func LogOut(g *gocui.Gui, msg string) error {
 	return nil
 }
 
+func UpdateUserList() {
+	out, err := g.View(viewArr[0])
+	if err != nil {
+		if err := LogOut(err.Error()); err != nil {
+			log.Println(err)
+		}
+	}
+	users, err := client.GetUserNames()
+	if err != nil {
+		if err := LogOut(err.Error()); err != nil {
+			log.Println(err)
+		}
+	}
+	out.Clear()
+	for _, user := range users {
+		if user == client.clientName {
+			continue
+		}
+		if _, err := magenta.Fprintln(out, user); err != nil {
+			if err := LogOut(err.Error()); err != nil {
+				log.Println(err)
+			}
+		}
+	}
+	if _, err := greenF.Fprintln(out, client.clientName); err != nil {
+		if err := LogOut(err.Error()); err != nil {
+			log.Println(err)
+		}
+	}
+}
+
 func quit(_ *gocui.Gui, _ *gocui.View) error {
 	return gocui.ErrQuit
 }
@@ -85,12 +135,12 @@ func main() {
 	var err error
 	conn, err := GetConnection()
 	if err != nil {
-		log.Println(err)
+		log.Panicln(err)
 	}
 
 	client, err = CreateClient(conn)
 	if err != nil {
-		log.Println(err)
+		log.Panicln(err)
 	}
 
 	g, err = gocui.NewGui(gocui.OutputNormal, true)
@@ -106,13 +156,13 @@ func main() {
 
 	if err != nil {
 		errMsg := fmt.Sprintf("Failed to connect to gRPC server :: %v", err)
-		if err := LogOut(g, errMsg); err != nil {
+		if err := LogOut(errMsg); err != nil {
 			log.Panicln(err)
 		}
 	}
 
 	defer func() {
-		if err := LogOut(g, "closing client"); err != nil {
+		if err := LogOut("closing client"); err != nil {
 			log.Panicln(err)
 		}
 		if err := conn.Close(); err != nil {
@@ -140,17 +190,16 @@ func main() {
 }
 
 // Outputs the message to the console ui chat-box window
-func printToConsole(msg string) {
+func printToConsole(sender string, msg string) {
 	out, err := g.View(viewArr[1])
+	x, _ := out.Size()
 	if err != nil {
-		if err := LogOut(g, err.Error()); err != nil {
+		if err := LogOut(err.Error()); err != nil {
 			log.Println(err)
 		}
 	}
-	if msg[len(msg)-1] != '\n' {
-		msg = msg + "\n"
-	}
-	out.WriteString(msg)
+	m := formatMessage(sender, msg, x)
+	out.WriteString(m)
 	g.UpdateAsync(func(gui *gocui.Gui) error {
 		return nil
 	})
@@ -158,12 +207,24 @@ func printToConsole(msg string) {
 }
 
 func setChatTimeout() {
-	delay = messageDelay
-	for {
-		time.Sleep(time.Second)
-		if delay <= 0 {
-			return
+	v, err := g.View(viewArr[3])
+	if err != nil {
+		if err := LogOut(err.Error()); err != nil {
+			log.Panicln(err)
 		}
-		delay--
 	}
+	v.FgColor = msgColor.msgBoxFGLow
+	canSend = false
+	time.Sleep(time.Second * time.Duration(client.delay))
+	canSend = true
+	msg := v.Buffer()
+	v.FgColor = msgColor.msgBoxFG
+	v.Clear()
+	v.WriteString(msg)
+	if err := v.SetCursor(len(msg), 0); err != nil {
+		log.Panicln(err)
+	}
+	g.UpdateAsync(func(gui *gocui.Gui) error {
+		return nil
+	})
 }

@@ -7,13 +7,25 @@ import (
 	"log"
 )
 
+type Colors struct {
+	msgBoxFG    gocui.Attribute
+	msgBoxBG    gocui.Attribute
+	msgBoxFGLow gocui.Attribute
+}
+
+var msgColor = Colors{
+	msgBoxBG:    gocui.ColorGreen,
+	msgBoxFG:    gocui.ColorWhite,
+	msgBoxFGLow: gocui.ColorRed,
+}
+
 func layout(g *gocui.Gui) error {
 	maxX, maxY := g.Size()
 	if v, err := g.SetView(viewArr[0], 0, 0, maxX/5-1, (maxY*4/5)-1, 0); err != nil {
 		if !errors.Is(err, gocui.ErrUnknownView) {
 			return err
 		}
-		v.Title = viewArr[0]
+		v.Title = "Room : " + client.roomName
 		//v.Editable = true
 		v.Wrap = true
 
@@ -24,7 +36,6 @@ func layout(g *gocui.Gui) error {
 			return err
 		}
 		v.Title = viewArr[1]
-		v.Wrap = true
 		v.Autoscroll = true
 	}
 	if v, err := g.SetView(viewArr[2], 0, (maxY*4/5)-1, maxX/5-1, maxY-1, 0); err != nil {
@@ -42,10 +53,10 @@ func layout(g *gocui.Gui) error {
 		if !errors.Is(err, gocui.ErrUnknownView) {
 			return err
 		}
-		v.Title = viewArr[3]
+		v.Title = client.clientName
 		v.Editable = true
-		v.BgColor = gocui.NewRGBColor(200, 50, 50)
-		v.FgColor = gocui.NewRGBColor(30, 200, 80)
+		v.BgColor = msgColor.msgBoxBG
+		v.FgColor = msgColor.msgBoxFG
 		v.EditDelete(true)
 
 		if _, err = setCurrentViewOnTop(g, viewArr[3]); err != nil {

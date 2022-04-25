@@ -16,6 +16,7 @@ func (is *ChatServer) SendMessage(_ context.Context, msg *FromClient) (*emptypb.
 	}
 	is.Mu.Unlock()
 	AppendMessage(user.Name, msg.Id, msg.Body, is.getClientsArray())
+
 	return &emptypb.Empty{}, nil
 }
 
