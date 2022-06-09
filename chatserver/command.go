@@ -4,9 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/google/uuid"
 	"google.golang.org/protobuf/types/known/emptypb"
 	"log"
-	"math/rand"
+	"time"
 )
 
 func (is *ChatServer) CommandService(_ context.Context, command *Command) (*emptypb.Empty, error) {
@@ -20,6 +21,7 @@ func (is *ChatServer) CommandService(_ context.Context, command *Command) (*empt
 		writtenNames := make([]User, 0)
 		errNames := make([]string, 0)
 		is.Mu.Lock()
+		log.Println("MU locked at commandService commnad.go")
 		for _, name := range names {
 			if usrId, ok := is.NameToUid[name]; ok {
 				t := is.Clients[usrId]
@@ -29,17 +31,18 @@ func (is *ChatServer) CommandService(_ context.Context, command *Command) (*empt
 			}
 		}
 		is.Mu.Unlock()
+		log.Println("MU unlocked at commandService command.go")
 		id := command.Id
 		user, ok := is.Clients[id]
 		if !ok {
 			return &emptypb.Empty{}, errors.New("error finding the sender name")
 		}
 
-		AppendMessage(user.Name, id, msg, writtenNames)
+		AppendMessage(user.Name, id, msg, time.Now().Unix(), writtenNames)
 
 		if len(errNames) > 0 {
 			msg := fmt.Sprintf("Could not find %v names in chat room", errNames)
-			AppendMessage("server", -1, msg, []User{user})
+			AppendMessage("server", "", msg, time.Now().Unix(), []User{user})
 		}
 	default:
 		return &emptypb.Empty{}, errors.New("no such command exists")
@@ -84,18 +87,21 @@ func (is *ChatServer) CreateClient(_ context.Context, clientName *ClientName) (*
 			Created: false,
 		}, errors.New("client with same name already exists")
 	}
-	clientUniqueCode := rand.Int31n(1e6)
+	clientUniqueCode := uuid.NewString()
 	log.Printf("New user with uniqueID :: %v", clientUniqueCode)
 	is.Mu.Lock()
+	log.Println("MU locked at CreateClient command.go")
 	is.Clients[clientUniqueCode] = User{
 		Name: clientName.Name,
 		Uid:  clientUniqueCode,
 	}
 	is.NameToUid[clientName.Name] = clientUniqueCode
 	is.Mu.Unlock()
+	log.Println("MU unlocked at CreateClient command.go")
+	log.Printf("Client added")
 	defer fmt.Println("verified")
 	return &CreateClientResponse{
-		Created:  ok,
+		Created:  !ok,
 		Id:       clientUniqueCode,
 		RoomName: is.Name,
 		Delay:    uint32(is.Delay),

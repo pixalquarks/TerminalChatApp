@@ -35,8 +35,8 @@ func main() {
 	cs := chatserver.ChatServer{
 		Name:      servVars.RoomName,
 		RoomSize:  servVars.RoomSize,
-		Clients:   make(map[int32]chatserver.User),
-		NameToUid: make(map[string]int32),
+		Clients:   make(map[string]chatserver.User),
+		NameToUid: make(map[string]string),
 		Mu:        sync.RWMutex{},
 		Delay:     servVars.Delay,
 	}

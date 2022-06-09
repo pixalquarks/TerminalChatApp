@@ -23,7 +23,6 @@ func GetNamesFromCommandString(command string) ([]string, string, error) {
 		return make([]string, 0), "", errors.New("no names found in the command")
 	}
 	names := command[t[0]:t[1]]
-	fmt.Println(t)
 
 	if names == "" || names == " " {
 		return make([]string, 0), "", errors.New("no names found in the command")
@@ -41,7 +40,8 @@ func VerifyNameCharacters(name string) (bool, error) {
 	return r.MatchString(name), nil
 }
 
-func AppendMessage(clientName string, cUniqCode int32, message string, to []User) {
+// AppendMessage Adds a message to the message queue
+func AppendMessage(clientName string, cUniqCode string, message string, timeStamp int64, to []User) {
 	messageHandleObject.mu.Lock()
 	defer messageHandleObject.mu.Unlock()
 
@@ -49,6 +49,7 @@ func AppendMessage(clientName string, cUniqCode int32, message string, to []User
 		ClientName:        clientName,
 		ClientUniqueCode:  cUniqCode,
 		MessageBody:       message,
+		TimeStamp:         timeStamp,
 		MessageUniqueCode: rand.Intn(1e8),
 		To:                to,
 	})
@@ -56,8 +57,12 @@ func AppendMessage(clientName string, cUniqCode int32, message string, to []User
 
 func IsRoomFull(serv *ChatServer) bool {
 	t := len(serv.Clients)
-	fmt.Println(t, serv.RoomSize)
+	fmt.Println("from isRoomFull", t, serv.RoomSize)
 	b := t >= int(serv.RoomSize)
-	fmt.Println(b)
+	fmt.Println("from isRoomFull", b)
 	return len(serv.Clients) >= int(serv.RoomSize)
 }
+
+//func generateUniqueMessageId(in string) string {
+//
+//}

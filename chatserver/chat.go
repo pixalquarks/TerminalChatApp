@@ -3,19 +3,32 @@ package chatserver
 import (
 	"context"
 	"errors"
+	"fmt"
 	"google.golang.org/protobuf/types/known/emptypb"
 	"time"
 )
 
 func (is *ChatServer) SendMessage(_ context.Context, msg *FromClient) (*emptypb.Empty, error) {
-	is.Mu.Lock()
-	id := msg.Id
-	user, ok := is.Clients[id]
-	if !ok {
-		return &emptypb.Empty{}, errors.New("couldn't find the name")
+	var id string
+	var user User
+	err := func() error {
+		is.Mu.Lock()
+		defer is.Mu.Unlock()
+		fmt.Println("MU locked in SendMessage chat.go")
+		id = msg.Id
+		var ok bool
+		user, ok = is.Clients[id]
+		if !ok {
+			return errors.New("couldn't find the name")
+		}
+		return nil
+	}()
+	
+	if err != nil {
+		return &emptypb.Empty{}, err
 	}
-	is.Mu.Unlock()
-	AppendMessage(user.Name, msg.Id, msg.Body, is.getClientsArray())
+	fmt.Println("MU unlocked in SendMessage chat.go")
+	AppendMessage(user.Name, msg.Id, msg.Body, msg.Timestamp, is.getClientsArray())
 
 	return &emptypb.Empty{}, nil
 }
@@ -36,6 +49,7 @@ func (is *ChatServer) sendToStream(errChannel_ chan error) {
 			senderUniqueCode := messageHandleObject.MQue[0].ClientUniqueCode
 			senderName4Client := messageHandleObject.MQue[0].ClientName
 			message4Client := messageHandleObject.MQue[0].MessageBody
+			timeStamp := messageHandleObject.MQue[0].TimeStamp
 			SendTo := messageHandleObject.MQue[0].To
 
 			messageHandleObject.mu.Unlock()
@@ -47,8 +61,9 @@ func (is *ChatServer) sendToStream(errChannel_ chan error) {
 						continue
 					}
 					err := user.Server.Send(&FromServer{
-						Name: senderName4Client,
-						Body: message4Client,
+						Name:      senderName4Client,
+						Body:      message4Client,
+						Timestamp: timeStamp,
 					})
 					if err != nil {
 						errChannel_ <- err
