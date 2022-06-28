@@ -19,6 +19,7 @@ const _ = grpc.SupportPackageIsVersion7
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type ServicesClient interface {
+	PingServer(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	ChatService(ctx context.Context, in *StreamRequest, opts ...grpc.CallOption) (Services_ChatServiceClient, error)
 	SendMessage(ctx context.Context, in *FromClient, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	CommandService(ctx context.Context, in *Command, opts ...grpc.CallOption) (*emptypb.Empty, error)
@@ -34,6 +35,15 @@ type servicesClient struct {
 
 func NewServicesClient(cc grpc.ClientConnInterface) ServicesClient {
 	return &servicesClient{cc}
+}
+
+func (c *servicesClient) PingServer(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	out := new(emptypb.Empty)
+	err := c.cc.Invoke(ctx, "/pixalquarks.terminalChatServer.Services/PingServer", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (c *servicesClient) ChatService(ctx context.Context, in *StreamRequest, opts ...grpc.CallOption) (Services_ChatServiceClient, error) {
@@ -126,6 +136,7 @@ func (c *servicesClient) VerifyName(ctx context.Context, in *ClientName, opts ..
 // All implementations must embed UnimplementedServicesServer
 // for forward compatibility
 type ServicesServer interface {
+	PingServer(context.Context, *emptypb.Empty) (*emptypb.Empty, error)
 	ChatService(*StreamRequest, Services_ChatServiceServer) error
 	SendMessage(context.Context, *FromClient) (*emptypb.Empty, error)
 	CommandService(context.Context, *Command) (*emptypb.Empty, error)
@@ -140,6 +151,9 @@ type ServicesServer interface {
 type UnimplementedServicesServer struct {
 }
 
+func (UnimplementedServicesServer) PingServer(context.Context, *emptypb.Empty) (*emptypb.Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method PingServer not implemented")
+}
 func (UnimplementedServicesServer) ChatService(*StreamRequest, Services_ChatServiceServer) error {
 	return status.Errorf(codes.Unimplemented, "method ChatService not implemented")
 }
@@ -172,6 +186,24 @@ type UnsafeServicesServer interface {
 
 func RegisterServicesServer(s grpc.ServiceRegistrar, srv ServicesServer) {
 	s.RegisterService(&Services_ServiceDesc, srv)
+}
+
+func _Services_PingServer_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(emptypb.Empty)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ServicesServer).PingServer(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/pixalquarks.terminalChatServer.Services/PingServer",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ServicesServer).PingServer(ctx, req.(*emptypb.Empty))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _Services_ChatService_Handler(srv interface{}, stream grpc.ServerStream) error {
@@ -310,6 +342,10 @@ var Services_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "pixalquarks.terminalChatServer.Services",
 	HandlerType: (*ServicesServer)(nil),
 	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "PingServer",
+			Handler:    _Services_PingServer_Handler,
+		},
 		{
 			MethodName: "SendMessage",
 			Handler:    _Services_SendMessage_Handler,

@@ -66,9 +66,11 @@ func (is *ChatServer) CheckOnClients() {
 		time.Sleep(time.Millisecond * 100)
 		for _, user := range is.getClientsArray() {
 			if &user == nil {
+				log.Println("removing a client from checkonClients", user)
 				continue
 			}
-			if &user == nil || user.Server.Context().Err() == context.Canceled {
+			if user.Server == nil || user.Server.Context().Err() == context.Canceled {
+				log.Println("removing a client from checkOnClients, context canceled", user)
 				is.removeClient(user.Uid)
 				continue
 			}

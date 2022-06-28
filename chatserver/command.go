@@ -4,10 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/google/uuid"
-	"google.golang.org/protobuf/types/known/emptypb"
 	"log"
 	"time"
+
+	"github.com/google/uuid"
+	"google.golang.org/protobuf/types/known/emptypb"
 )
 
 func (is *ChatServer) CommandService(_ context.Context, command *Command) (*emptypb.Empty, error) {
@@ -48,6 +49,11 @@ func (is *ChatServer) CommandService(_ context.Context, command *Command) (*empt
 		return &emptypb.Empty{}, errors.New("no such command exists")
 	}
 
+	return &emptypb.Empty{}, nil
+}
+
+func (is *ChatServer) PingServer(_ context.Context, _ *emptypb.Empty) (*emptypb.Empty, error) {
+	log.Println("Someone bumped the server")
 	return &emptypb.Empty{}, nil
 }
 
