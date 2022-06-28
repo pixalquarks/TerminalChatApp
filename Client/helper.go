@@ -15,7 +15,7 @@ func VerifyNameCharacters(name string) (bool, error) {
 	return r.MatchString(name), nil
 }
 
-func formatMessage(sender string, msg string, maxWidth int) string {
+func formatMessage(sender string, msg string, timeStamp int64, maxWidth int) string {
 	var sb strings.Builder
 	serv := "SERVER"
 	sep := " :: "

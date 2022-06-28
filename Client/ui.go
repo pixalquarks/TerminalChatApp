@@ -3,11 +3,12 @@ package main
 import (
 	"errors"
 	"fmt"
-	"github.com/awesome-gocui/gocui"
-	"github.com/fatih/color"
 	"log"
 	"strings"
 	"time"
+
+	"github.com/awesome-gocui/gocui"
+	"github.com/fatih/color"
 )
 
 var (
@@ -21,8 +22,6 @@ var (
 	blue    = color.New(color.FgBlue)
 	magenta = color.New(color.FgMagenta)
 )
-
-const messageDelay = 1 // delay between user can input(in seconds)
 
 func setCurrentViewOnTop(g *gocui.Gui, name string) (*gocui.View, error) {
 	if _, err := g.SetCurrentView(name); err != nil {
@@ -190,7 +189,7 @@ func main() {
 }
 
 // Outputs the message to the console ui chat-box window
-func printToConsole(sender string, msg string) {
+func printToConsole(sender string, msg string, timeStamp int64) {
 	out, err := g.View(viewArr[1])
 	x, _ := out.Size()
 	if err != nil {
@@ -198,7 +197,7 @@ func printToConsole(sender string, msg string) {
 			log.Println(err)
 		}
 	}
-	m := formatMessage(sender, msg, x)
+	m := formatMessage(sender, msg, timeStamp, x)
 	out.WriteString(m)
 	g.UpdateAsync(func(gui *gocui.Gui) error {
 		return nil

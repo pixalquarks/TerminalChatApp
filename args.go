@@ -20,7 +20,7 @@ func portValidate(args string) error {
 	if err != nil {
 		return err
 	}
-	if p < 1000 || p > 65535 {
+	if p < 10 || p > 65535 {
 		return errors.New("port out of range, must be between 1000 and 65535")
 	}
 	return nil

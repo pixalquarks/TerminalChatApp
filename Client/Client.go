@@ -5,12 +5,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"google.golang.org/grpc"
-	"google.golang.org/protobuf/types/known/emptypb"
 	"log"
 	"os"
-	"pixalquarks.terminalChatServer/chatserver"
 	"strings"
+	"time"
+
+	"google.golang.org/grpc"
+	"google.golang.org/protobuf/types/known/emptypb"
+	"pixalquarks.terminalChatServer/chatserver"
 )
 
 type clientHandle struct {
@@ -19,7 +21,7 @@ type clientHandle struct {
 	clientName string
 	roomName   string
 	delay      int
-	uid        int32
+	uid        string
 }
 
 func GetConnection() (*grpc.ClientConn, error) {
@@ -116,7 +118,7 @@ func (ch *clientHandle) Config(name string) error {
 			if err != nil {
 				return err
 			}
-			if !resp.Created {
+			if resp.Created {
 				ch.clientName = name
 				ch.uid = resp.Id
 				ch.roomName = resp.RoomName
@@ -134,7 +136,7 @@ func (ch *clientHandle) Config(name string) error {
 func (ch *clientHandle) quit() error {
 	_, err := ch.client.RemoveClient(context.Background(), &chatserver.Client{
 		Name: ch.clientName,
-		Id:   int32(ch.uid),
+		Id:   ch.uid,
 	})
 	if err != nil {
 		return err
@@ -160,7 +162,7 @@ func (ch *clientHandle) sendMessage(msg string) error {
 			if _, err := ch.client.CommandService(context.Background(), &chatserver.Command{
 				Type:  uint32(command),
 				Value: msg[2:],
-				Id:    int32(ch.uid),
+				Id:    ch.uid,
 			}); err != nil {
 				if er := LogOut(err.Error()); er != nil {
 					log.Println(er)
@@ -174,8 +176,9 @@ func (ch *clientHandle) sendMessage(msg string) error {
 	} else {
 
 		clientMessageBox := &chatserver.FromClient{
-			Id:   int32(ch.uid),
-			Body: msg,
+			Id:        ch.uid,
+			Body:      msg,
+			Timestamp: time.Now().Unix(),
 		}
 		_, err := ch.client.SendMessage(context.Background(), clientMessageBox)
 
@@ -187,7 +190,7 @@ func (ch *clientHandle) sendMessage(msg string) error {
 }
 
 // receive message
-func (ch *clientHandle) receiveMessage(out func(sender string, message string)) {
+func (ch *clientHandle) receiveMessage(out func(sender string, message string, timeStamp int64)) {
 	for {
 		msg, err := ch.stream.Recv()
 		if err != nil {
@@ -198,10 +201,10 @@ func (ch *clientHandle) receiveMessage(out func(sender string, message string)) 
 			if msg.Name == "server" {
 				UpdateUserList()
 				//m := fmt.Sprintf("***** System Message : %s *****\n", msg.Body)
-				out(msg.Name, msg.Body)
+				out(msg.Name, msg.Body, msg.Timestamp)
 			} else {
 				//m := fmt.Sprintf("%s :: %s \n", msg.Name, msg.Body)
-				out(msg.Name, msg.Body)
+				out(msg.Name, msg.Body, msg.Timestamp)
 			}
 		}
 	}
